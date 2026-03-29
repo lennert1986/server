@@ -36,6 +36,7 @@ class TelmoreAPIClient:
     # Telmore web client values observed from browser traffic
     APP_VERSION = "0.2.1.4892"
     CLIENT_ID = "46aef9c9-92f5-4c5f-84b4-820e9fc0ca4d"
+    API_PORTAL_ID = "1387"
 
     throttler = ThrottlerManager(rate_limit=4, period=1)
 
@@ -62,8 +63,11 @@ class TelmoreAPIClient:
             "Accept": "application/json",
             "Content-Type": "application/json",
             "Accept-Language": locale,
+            "Origin": "https://musik.telmore.dk",
+            "Referer": "https://musik.telmore.dk/",
             "x-app-version": self.APP_VERSION,
             "x-client-id": self.CLIENT_ID,
+            "x-api-portal-id": self.API_PORTAL_ID,
         }
 
         if _headers:
@@ -75,7 +79,16 @@ class TelmoreAPIClient:
             headers=headers,
         ) as resp:
             if resp.status in {401, 403}:
+                text = await resp.text()
                 self.logger.debug("GraphQL auth failed with status %s", resp.status)
+                self.logger.debug("GraphQL response snippet: %s", text[:1000])
+                self.logger.debug("GraphQL endpoint: %s", self.GRAPHQL_ENDPOINT)
+                self.logger.debug(
+                    "Authorization starts with Bearer: %s",
+                    str(headers.get("Authorization", "")).startswith("Bearer "),
+                )
+                self.logger.debug("Using x-client-id: %s", headers.get("x-client-id"))
+                self.logger.debug("Using x-api-portal-id: %s", headers.get("x-api-portal-id"))
                 self.auth.invalidate()
                 raise LoginFailed("Authentication with Telmore failed")
 
