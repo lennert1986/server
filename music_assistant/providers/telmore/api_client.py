@@ -31,7 +31,7 @@ class TelmoreGraphQLError(Exception):
 class TelmoreAPIClient:
     """Client for interacting with Telmore API."""
 
-    GRAPHQL_ENDPOINT = "https://graphql-1458.api.247e.com/graphql"
+    GRAPHQL_ENDPOINT = "https://graphql-1387.api.247e.com/graphql"
 
     # Telmore web client values observed from browser traffic
     APP_VERSION = "0.2.1.4892"
