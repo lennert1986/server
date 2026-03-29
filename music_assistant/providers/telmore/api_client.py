@@ -58,7 +58,7 @@ class TelmoreAPIClient:
             raise LoginFailed("Authentication with Telmore failed")
 
         headers: JsonLike = {
-            "Authorization": f"Bearer {str(token)}",
+            "Authorization": str(token),
             "Accept": "application/json",
             "Content-Type": "application/json",
             "Accept-Language": locale,
