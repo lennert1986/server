@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import uuid
 from typing import TYPE_CHECKING, Any
 
 from music_assistant_models.errors import LoginFailed
@@ -33,10 +35,8 @@ class TelmoreAPIClient:
 
     GRAPHQL_ENDPOINT = "https://graphql-1387.api.247e.com/graphql"
 
-    # Telmore web client values observed from browser traffic
     APP_VERSION = "0.2.1.4892"
     CLIENT_ID = "46aef9c9-92f5-4c5f-84b4-820e9fc0ca4d"
-    API_PORTAL_ID = "1387"
 
     throttler = ThrottlerManager(rate_limit=4, period=1)
 
@@ -46,6 +46,13 @@ class TelmoreAPIClient:
         self.auth = provider.auth
         self.logger = provider.logger
         self.mass = provider.mass
+
+    def _extract_operation_name(self, query: str) -> str:
+        """Extract GraphQL operation name from query string."""
+        match = re.search(r"\b(query|mutation)\s+([A-Za-z0-9_]+)", query)
+        if match:
+            return match.group(2)
+        return "UnknownOperation"
 
     @throttle_with_retries  # type: ignore[type-var]
     async def post_graphql(
@@ -58,6 +65,8 @@ class TelmoreAPIClient:
         if token is None:
             raise LoginFailed("Authentication with Telmore failed")
 
+        operation_name = self._extract_operation_name(query)
+
         headers: JsonLike = {
             "Authorization": str(token),
             "Accept": "application/json",
@@ -67,7 +76,12 @@ class TelmoreAPIClient:
             "Referer": "https://musik.telmore.dk/",
             "x-app-version": self.APP_VERSION,
             "x-client-id": self.CLIENT_ID,
-            "x-api-portal-id": self.API_PORTAL_ID,
+            "x-cache-type": "none",
+            "x-correlation-id": str(uuid.uuid4()),
+            "x-operation-name": operation_name,
+            "x-operation-type": "query",
+            "x-platform": "web",
+            "x-user": "",
         }
 
         if _headers:
@@ -88,7 +102,8 @@ class TelmoreAPIClient:
                     str(headers.get("Authorization", "")).startswith("Bearer "),
                 )
                 self.logger.debug("Using x-client-id: %s", headers.get("x-client-id"))
-                self.logger.debug("Using x-api-portal-id: %s", headers.get("x-api-portal-id"))
+                self.logger.debug("Using x-operation-name: %s", headers.get("x-operation-name"))
+                self.logger.debug("Using x-operation-type: %s", headers.get("x-operation-type"))
                 self.auth.invalidate()
                 raise LoginFailed("Authentication with Telmore failed")
 
