@@ -60,7 +60,7 @@ class TelmoreAuthManager:
             self.logger.debug("Trying refresh token flow")
             async with self.mass.http_session.post(
                 "https://musik.telmore.dk/api/token",
-                data={"refresh_token": self._refresh_token},
+                json={"refresh_token": self._refresh_token},
             ) as refresh_response:
                 try:
                     refresh_result = await refresh_response.json()
