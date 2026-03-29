@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from music_assistant_models.errors import (
-    LoginFailed,
-)
+from music_assistant_models.errors import LoginFailed
 
 from music_assistant.constants import VERBOSE_LOG_LEVEL
 from music_assistant.helpers.json import json_dumps
@@ -33,9 +31,12 @@ class TelmoreGraphQLError(Exception):
 class TelmoreAPIClient:
     """Client for interacting with Telmore API."""
 
-    YOUSEE_GRAPHQL_ENDPOINT = "https://graphql-1458.api.247e.com/graphql"
+    GRAPHQL_ENDPOINT = "https://graphql-1458.api.247e.com/graphql"
 
-    # Unsure if yousee enforces rate limiting, this is just a sane precaution
+    # Telmore web client values observed from browser traffic
+    APP_VERSION = "0.2.1.4892"
+    CLIENT_ID = "46aef9c9-92f5-4c5f-84b4-820e9fc0ca4d"
+
     throttler = ThrottlerManager(rate_limit=4, period=1)
 
     def __init__(self, provider: TelmoreMusikProvider):
@@ -52,24 +53,40 @@ class TelmoreAPIClient:
         """Post GraphQL query to Telmore endpoint with authorization."""
         locale = self.mass.metadata.locale.split("_")[0]
 
+        token = await self.auth.auth_token()
+        if token is None:
+            raise LoginFailed("Authentication with Telmore failed")
+
+        headers: JsonLike = {
+            "Authorization": f"Bearer {str(token)}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Accept-Language": locale,
+            "x-app-version": self.APP_VERSION,
+            "x-client-id": self.CLIENT_ID,
+        }
+
+        if _headers:
+            headers |= _headers
+
         async with self.mass.http_session.post(
-            self.YOUSEE_GRAPHQL_ENDPOINT,
+            self.GRAPHQL_ENDPOINT,
             json={"query": query, "variables": variables},
-            headers={
-                "Authorization": f"Bearer {await self.auth.auth_token()}",
-                "Accept-Language": locale,
-            }
-            | (_headers or {}),
+            headers=headers,
         ) as resp:
             if resp.status in {401, 403}:
-                # Invalidate token
+                self.logger.debug("GraphQL auth failed with status %s", resp.status)
                 self.auth.invalidate()
                 raise LoginFailed("Authentication with Telmore failed")
+
+            if resp.status == 415:
+                self.logger.debug("GraphQL request rejected with 415 Unsupported Media Type")
 
             resp.raise_for_status()
 
             result = await resp.json()
             if len(result.get("errors", [])) > 0:
+                self.logger.debug("GraphQL returned errors: %s", result.get("errors"))
                 raise TelmoreGraphQLError(result)
 
             return dict(result)
@@ -94,7 +111,6 @@ class TelmoreAPIClient:
             }
             result = await self.post_graphql(query, vars_with_pagination)
 
-            # Navigate to the page containing items and pageInfo
             page_data = result
             for key in page_path:
                 page_data = page_data.get(key, {})
