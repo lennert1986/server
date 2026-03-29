@@ -68,7 +68,7 @@ class TelmoreAPIClient:
         operation_name = self._extract_operation_name(query)
 
         headers: JsonLike = {
-            "Authorization": str(token),
+            "Authorization": f"Bearer {str(token)}",
             "Accept": "application/json",
             "Content-Type": "application/json",
             "Accept-Language": locale,
